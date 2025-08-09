@@ -34,10 +34,26 @@ const WordPressToCanva = () => {
   // Helper function to validate image URL
   const validateImageUrl = async (imageUrl) => {
     try {
-      const response = await fetch(imageUrl, { method: 'HEAD' });
-      return response.ok;
+      // Try HEAD request first (more efficient)
+      const response = await fetch(imageUrl, { 
+        method: 'HEAD',
+        mode: 'no-cors' // This allows cross-origin requests
+      });
+      return true; // If we get here, the request didn't fail
     } catch (error) {
-      return false;
+      try {
+        // Fallback: try to create an image object to test if it loads
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(true);
+          img.onerror = () => resolve(false);
+          img.src = imageUrl;
+          // Timeout after 5 seconds
+          setTimeout(() => resolve(false), 5000);
+        });
+      } catch (fallbackError) {
+        return false;
+      }
     }
   };
 
@@ -98,21 +114,38 @@ const WordPressToCanva = () => {
   // Validate all images
   const validateImages = async () => {
     setProcessingStatus(prev => ({ ...prev, validating: true }));
+    setErrors([]);
     
     const updatedPosts = [...posts];
+    let validCount = 0;
+    let invalidCount = 0;
+    let noImageCount = 0;
     
     for (let i = 0; i < updatedPosts.length; i++) {
       const post = updatedPosts[i];
       if (post.imageUrl) {
         const isValid = await validateImageUrl(post.imageUrl);
         updatedPosts[i] = { ...post, imageStatus: isValid ? 'valid' : 'invalid' };
+        if (isValid) validCount++;
+        else invalidCount++;
       } else {
         updatedPosts[i] = { ...post, imageStatus: 'no_image' };
+        noImageCount++;
       }
     }
     
     setPosts(updatedPosts);
     setProcessingStatus(prev => ({ ...prev, validating: false }));
+    
+    // Show validation results
+    const messages = [];
+    if (validCount > 0) messages.push(`${validCount} images validated successfully`);
+    if (invalidCount > 0) messages.push(`${invalidCount} images failed validation (CORS restrictions may apply)`);
+    if (noImageCount > 0) messages.push(`${noImageCount} posts have no featured images`);
+    
+    if (messages.length > 0) {
+      setErrors(messages);
+    }
   };
 
   // Optimize titles with AI
@@ -357,6 +390,22 @@ DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON.`;
             style={styles.button}
           >
             {processingStatus.optimizing ? 'Optimizing...' : 'Optimize Titles'}
+          </button>
+          <button
+            onClick={() => {
+              // Allow optimization even with invalid images
+              const postsWithAnyImages = posts.filter(post => post.imageStatus !== 'no_image');
+              if (postsWithAnyImages.length > 0) {
+                setPosts(prev => prev.map(post => 
+                  post.imageStatus === 'invalid' ? { ...post, imageStatus: 'valid' } : post
+                ));
+                setErrors(['Note: Proceeding with image validation bypassed. Some images may not be accessible due to CORS restrictions.']);
+              }
+            }}
+            disabled={posts.filter(p => p.imageStatus === 'invalid').length === 0 || processingStatus.optimizing}
+            style={styles.buttonSecondary}
+          >
+            Bypass Image Validation
           </button>
           <button
             onClick={clearData}
