@@ -12,7 +12,7 @@ const WordPressToCanva = () => {
   const [posts, setPosts] = useState([]);
   const [processing, setProcessing] = useState(false);
   const [csvColumns, setCsvColumns] = useState([
-    'Title', 'Optimized_Title', 'Image_URL', 'Post_URL', 'Image_Status'
+    'Title', 'Optimized_Title', 'Image_URL', 'Post_URL'
   ]);
   
   const [processingStatus, setProcessingStatus] = useState({
@@ -257,7 +257,16 @@ DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON.`;
     setProcessingStatus(prev => ({ ...prev, generating: true }));
     
     try {
-      const csvData = posts.map(post => {
+      // Only include posts that have been optimized
+      const optimizedPosts = posts.filter(post => post.optimizedTitle);
+      
+      if (optimizedPosts.length === 0) {
+        setErrors(['No optimized titles found. Please optimize titles first before generating CSV.']);
+        setProcessingStatus(prev => ({ ...prev, generating: false }));
+        return;
+      }
+      
+      const csvData = optimizedPosts.map(post => {
         const row = {};
         csvColumns.forEach(column => {
           switch (column) {
@@ -265,16 +274,13 @@ DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON.`;
               row[column] = post.title || '';
               break;
             case 'Optimized_Title':
-              row[column] = post.optimizedTitle || post.title || '';
+              row[column] = post.optimizedTitle || '';
               break;
             case 'Image_URL':
               row[column] = post.imageUrl || '';
               break;
             case 'Post_URL':
               row[column] = post.permalink || '';
-              break;
-            case 'Image_Status':
-              row[column] = post.imageUrl ? 'has_image' : 'no_image';
               break;
             default:
               row[column] = '';
@@ -377,29 +383,22 @@ DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON.`;
       {/* Processing Controls */}
       <section style={styles.section}>
         <h2 style={styles.sectionTitle}>Data Processing</h2>
-        <div style={styles.buttonGroup}>
-          <button
-            onClick={validateImages}
-            disabled={posts.length === 0 || processingStatus.validating}
-            style={styles.button}
-          >
-            {processingStatus.validating ? 'Validating...' : 'Validate Images'}
-          </button>
-          <button
-            onClick={optimizeTitles}
-            disabled={posts.filter(p => p.imageUrl).length === 0 || processingStatus.optimizing}
-            style={styles.button}
-          >
-            {processingStatus.optimizing ? 'Optimizing...' : 'Optimize Titles'}
-          </button>
+                 <div style={styles.buttonGroup}>
+           <button
+             onClick={optimizeTitles}
+             disabled={posts.filter(p => p.imageUrl).length === 0 || processingStatus.optimizing}
+             style={styles.button}
+           >
+             {processingStatus.optimizing ? 'Optimizing...' : 'Optimize Titles'}
+           </button>
 
-          <button
-            onClick={clearData}
-            style={styles.buttonSecondary}
-          >
-            Clear All Data
-          </button>
-        </div>
+           <button
+             onClick={clearData}
+             style={styles.buttonSecondary}
+           >
+             Clear All Data
+           </button>
+         </div>
       </section>
 
       {/* CSV Configuration */}
@@ -462,41 +461,32 @@ DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON.`;
           <div style={styles.resultsContainer}>
             <table style={styles.table}>
               <thead>
-                <tr>
-                  <th style={styles.th}>Original Title</th>
-                  <th style={styles.th}>Optimized Title</th>
-                  <th style={styles.th}>Image Status</th>
-                  <th style={styles.th}>Image URL</th>
-                </tr>
+                                 <tr>
+                   <th style={styles.th}>Original Title</th>
+                   <th style={styles.th}>Optimized Title</th>
+                   <th style={styles.th}>Image URL</th>
+                 </tr>
               </thead>
               <tbody>
                 {posts.map((post, index) => (
                   <tr key={post.id || index} style={styles.tr}>
                     <td style={styles.td}>{post.title}</td>
-                    <td style={styles.td}>
-                      {post.optimizedTitle ? (
-                        <span style={styles.optimized}>{post.optimizedTitle}</span>
-                      ) : (
-                        <span style={styles.pending}>Not optimized</span>
-                      )}
-                    </td>
                                          <td style={styles.td}>
-                       <span style={{
-                         ...styles.status,
-                         ...(post.imageUrl ? styles.valid : styles.noImage)
-                       }}>
-                         {post.imageUrl ? 'Has Image' : 'No Image'}
-                       </span>
+                       {post.optimizedTitle ? (
+                         <span style={styles.optimized}>{post.optimizedTitle}</span>
+                       ) : (
+                         <span style={styles.pending}>Not optimized</span>
+                       )}
                      </td>
-                    <td style={styles.td}>
-                      {post.imageUrl ? (
-                        <a href={post.imageUrl} target="_blank" rel="noopener noreferrer" style={styles.link}>
-                          View Image
-                        </a>
-                      ) : (
-                        'No image'
-                      )}
-                    </td>
+                     <td style={styles.td}>
+                       {post.imageUrl ? (
+                         <a href={post.imageUrl} target="_blank" rel="noopener noreferrer" style={styles.link}>
+                           View Image
+                         </a>
+                       ) : (
+                         'No image'
+                       )}
+                     </td>
                   </tr>
                 ))}
               </tbody>
