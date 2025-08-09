@@ -31,31 +31,50 @@ const WordPressToCanva = () => {
     return domainRegex.test(domain.replace(/^https?:\/\//, ''));
   };
 
-  // Helper function to validate image URL
-  const validateImageUrl = async (imageUrl) => {
-    try {
-      // Try HEAD request first (more efficient)
-      const response = await fetch(imageUrl, { 
-        method: 'HEAD',
-        mode: 'no-cors' // This allows cross-origin requests
-      });
-      return true; // If we get here, the request didn't fail
-    } catch (error) {
-      try {
-        // Fallback: try to create an image object to test if it loads
-        return new Promise((resolve) => {
-          const img = new Image();
-          img.onload = () => resolve(true);
-          img.onerror = () => resolve(false);
-          img.src = imageUrl;
-          // Timeout after 5 seconds
-          setTimeout(() => resolve(false), 5000);
-        });
-      } catch (fallbackError) {
-        return false;
-      }
-    }
-  };
+     // Helper function to validate image URL
+   const validateImageUrl = async (imageUrl) => {
+     try {
+       // Try HEAD request first (more efficient)
+       const response = await fetch(imageUrl, { 
+         method: 'HEAD',
+         mode: 'no-cors' // This allows cross-origin requests
+       });
+       return true; // If we get here, the request didn't fail
+     } catch (error) {
+       try {
+         // Fallback: try to create an image object to test if it loads
+         return new Promise((resolve) => {
+           const img = new Image();
+           img.onload = () => resolve(true);
+           img.onerror = () => resolve(false);
+           img.src = imageUrl;
+           // Timeout after 5 seconds
+           setTimeout(() => resolve(false), 5000);
+         });
+       } catch (fallbackError) {
+         return false;
+       }
+     }
+   };
+
+   // Helper function to test if image URL is accessible by Canva
+   const testImageForCanva = async (imageUrl) => {
+     try {
+       // Try to fetch the image to see if it's publicly accessible
+       const response = await fetch(imageUrl, {
+         method: 'GET',
+         mode: 'cors'
+       });
+       
+       if (response.ok) {
+         const contentType = response.headers.get('content-type');
+         return contentType && contentType.startsWith('image/');
+       }
+       return false;
+     } catch (error) {
+       return false;
+     }
+   };
 
   // Fetch WordPress posts
   const fetchWordPressPosts = async () => {
@@ -83,14 +102,35 @@ const WordPressToCanva = () => {
         throw new Error('Invalid response format from WordPress API');
       }
 
-      // Extract post data
-      const extractedPosts = data.map(post => ({
-        id: post.id,
-        title: post.title.rendered,
-        permalink: post.link,
-        imageUrl: post._embedded?.['wp:featuredmedia']?.[0]?.source_url || null,
-        imageStatus: 'pending'
-      }));
+             // Extract post data
+       const extractedPosts = data.map(post => {
+         // Get the featured image URL and ensure it's absolute
+         let imageUrl = post._embedded?.['wp:featuredmedia']?.[0]?.source_url || null;
+         
+         // If we have a relative URL, make it absolute
+         if (imageUrl && !imageUrl.startsWith('http')) {
+           imageUrl = `https://${cleanDomain}${imageUrl}`;
+         }
+         
+         // Try alternative image sources if the main one is not available
+         if (!imageUrl && post._embedded?.['wp:featuredmedia']?.[0]) {
+           const media = post._embedded['wp:featuredmedia'][0];
+           imageUrl = media.guid?.rendered || media.media_details?.sizes?.full?.source_url || media.source_url || null;
+           
+           // Make sure it's absolute
+           if (imageUrl && !imageUrl.startsWith('http')) {
+             imageUrl = `https://${cleanDomain}${imageUrl}`;
+           }
+         }
+         
+         return {
+           id: post.id,
+           title: post.title.rendered,
+           permalink: post.link,
+           imageUrl: imageUrl,
+           imageStatus: 'pending'
+         };
+       });
 
       // Filter out already processed posts
       const newPosts = extractedPosts.filter(post => !processedIds.has(post.id));
@@ -111,42 +151,42 @@ const WordPressToCanva = () => {
     }
   };
 
-  // Validate all images
-  const validateImages = async () => {
-    setProcessingStatus(prev => ({ ...prev, validating: true }));
-    setErrors([]);
-    
-    const updatedPosts = [...posts];
-    let validCount = 0;
-    let invalidCount = 0;
-    let noImageCount = 0;
-    
-    for (let i = 0; i < updatedPosts.length; i++) {
-      const post = updatedPosts[i];
-      if (post.imageUrl) {
-        const isValid = await validateImageUrl(post.imageUrl);
-        updatedPosts[i] = { ...post, imageStatus: isValid ? 'valid' : 'invalid' };
-        if (isValid) validCount++;
-        else invalidCount++;
-      } else {
-        updatedPosts[i] = { ...post, imageStatus: 'no_image' };
-        noImageCount++;
-      }
-    }
-    
-    setPosts(updatedPosts);
-    setProcessingStatus(prev => ({ ...prev, validating: false }));
-    
-    // Show validation results
-    const messages = [];
-    if (validCount > 0) messages.push(`${validCount} images validated successfully`);
-    if (invalidCount > 0) messages.push(`${invalidCount} images failed validation (CORS restrictions may apply)`);
-    if (noImageCount > 0) messages.push(`${noImageCount} posts have no featured images`);
-    
-    if (messages.length > 0) {
-      setErrors(messages);
-    }
-  };
+     // Test images for Canva compatibility
+   const testImagesForCanva = async () => {
+     setProcessingStatus(prev => ({ ...prev, validating: true }));
+     setErrors([]);
+     
+     const updatedPosts = [...posts];
+     let canvaCompatibleCount = 0;
+     let incompatibleCount = 0;
+     let noImageCount = 0;
+     
+     for (let i = 0; i < updatedPosts.length; i++) {
+       const post = updatedPosts[i];
+       if (post.imageUrl) {
+         const isCanvaCompatible = await testImageForCanva(post.imageUrl);
+         updatedPosts[i] = { ...post, imageStatus: isCanvaCompatible ? 'canva_ok' : 'canva_fail' };
+         if (isCanvaCompatible) canvaCompatibleCount++;
+         else incompatibleCount++;
+       } else {
+         updatedPosts[i] = { ...post, imageStatus: 'no_image' };
+         noImageCount++;
+       }
+     }
+     
+     setPosts(updatedPosts);
+     setProcessingStatus(prev => ({ ...prev, validating: false }));
+     
+     // Show test results
+     const messages = [];
+     if (canvaCompatibleCount > 0) messages.push(`${canvaCompatibleCount} images are Canva-compatible`);
+     if (incompatibleCount > 0) messages.push(`${incompatibleCount} images may not work with Canva (try different image sources)`);
+     if (noImageCount > 0) messages.push(`${noImageCount} posts have no featured images`);
+     
+     if (messages.length > 0) {
+       setErrors(messages);
+     }
+   };
 
   // Optimize titles with AI
   const optimizeTitles = async () => {
@@ -370,26 +410,34 @@ DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON.`;
         </button>
       </section>
 
-      {/* Processing Controls */}
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Data Processing</h2>
-                 <div style={styles.buttonGroup}>
-           <button
-             onClick={optimizeTitles}
-             disabled={posts.filter(p => p.imageUrl).length === 0 || processingStatus.optimizing}
-             style={styles.button}
-           >
-             {processingStatus.optimizing ? 'Optimizing...' : 'Optimize Titles'}
-           </button>
+             {/* Processing Controls */}
+       <section style={styles.section}>
+         <h2 style={styles.sectionTitle}>Data Processing</h2>
+                  <div style={styles.buttonGroup}>
+            <button
+              onClick={optimizeTitles}
+              disabled={posts.filter(p => p.imageUrl).length === 0 || processingStatus.optimizing}
+              style={styles.button}
+            >
+              {processingStatus.optimizing ? 'Optimizing...' : 'Optimize Titles'}
+            </button>
 
-           <button
-             onClick={clearData}
-             style={styles.buttonSecondary}
-           >
-             Clear All Data
-           </button>
-         </div>
-      </section>
+            <button
+              onClick={testImagesForCanva}
+              disabled={posts.length === 0 || processingStatus.validating}
+              style={styles.buttonSecondary}
+            >
+              {processingStatus.validating ? 'Testing...' : 'Test Images for Canva'}
+            </button>
+
+            <button
+              onClick={clearData}
+              style={styles.buttonSecondary}
+            >
+              Clear All Data
+            </button>
+          </div>
+       </section>
 
       {/* CSV Configuration */}
       <section style={styles.section}>
@@ -454,6 +502,7 @@ DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON.`;
                                   <tr>
                     <th style={styles.th}>Title</th>
                     <th style={styles.th}>Image URL</th>
+                    <th style={styles.th}>Canva Status</th>
                   </tr>
                </thead>
                <tbody>
@@ -473,6 +522,17 @@ DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON.`;
                           </a>
                         ) : (
                           'No image'
+                        )}
+                      </td>
+                      <td style={styles.td}>
+                        {post.imageStatus === 'canva_ok' ? (
+                          <span style={styles.canvaOk}>✓ Canva Ready</span>
+                        ) : post.imageStatus === 'canva_fail' ? (
+                          <span style={styles.canvaFail}>✗ May not work</span>
+                        ) : post.imageStatus === 'no_image' ? (
+                          <span style={styles.noImage}>No image</span>
+                        ) : (
+                          <span style={styles.pending}>Not tested</span>
                         )}
                       </td>
                    </tr>
@@ -658,14 +718,30 @@ const styles = {
     backgroundColor: '#f8d7da',
     color: '#721c24'
   },
-  noImage: {
-    backgroundColor: '#fff3cd',
-    color: '#856404'
-  },
-  link: {
-    color: '#007bff',
-    textDecoration: 'none'
-  }
+     noImage: {
+     backgroundColor: '#fff3cd',
+     color: '#856404'
+   },
+   canvaOk: {
+     backgroundColor: '#d4edda',
+     color: '#155724',
+     padding: '4px 8px',
+     borderRadius: '4px',
+     fontSize: '12px',
+     fontWeight: 'bold'
+   },
+   canvaFail: {
+     backgroundColor: '#f8d7da',
+     color: '#721c24',
+     padding: '4px 8px',
+     borderRadius: '4px',
+     fontSize: '12px',
+     fontWeight: 'bold'
+   },
+   link: {
+     color: '#007bff',
+     textDecoration: 'none'
+   }
 };
 
 export default WordPressToCanva;
