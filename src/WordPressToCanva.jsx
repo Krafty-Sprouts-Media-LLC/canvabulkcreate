@@ -12,7 +12,7 @@ const WordPressToCanva = () => {
   const [posts, setPosts] = useState([]);
   const [processing, setProcessing] = useState(false);
   const [csvColumns, setCsvColumns] = useState([
-    'Title', 'Image_URL', 'Post_URL'
+    'Title', 'Image', 'URL'
   ]);
   
   const [processingStatus, setProcessingStatus] = useState({
@@ -300,22 +300,22 @@ DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON.`;
       // Include all posts, use optimized title if available, otherwise use original title
       const csvData = posts.map(post => {
         const row = {};
-        csvColumns.forEach(column => {
-          switch (column) {
-            case 'Title':
-              // Use optimized title if available, otherwise use original title
-              row[column] = post.optimizedTitle || post.title || '';
-              break;
-            case 'Image_URL':
-              row[column] = post.imageUrl || '';
-              break;
-            case 'Post_URL':
-              row[column] = post.permalink || '';
-              break;
-            default:
-              row[column] = '';
-          }
-        });
+                 csvColumns.forEach(column => {
+           switch (column) {
+             case 'Title':
+               // Use optimized title if available, otherwise use original title
+               row[column] = post.optimizedTitle || post.title || '';
+               break;
+             case 'Image':
+               row[column] = post.imageUrl || '';
+               break;
+             case 'URL':
+               row[column] = post.permalink || '';
+               break;
+             default:
+               row[column] = '';
+           }
+         });
         return row;
       });
 
@@ -439,33 +439,36 @@ DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON.`;
           </div>
        </section>
 
-      {/* CSV Configuration */}
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>CSV Configuration</h2>
-        <div style={styles.csvConfig}>
-          <div style={styles.columnHeaders}>
-            {csvColumns.map((column, index) => (
-              <div key={index} style={styles.columnHeader}>
-                <input
-                  type="text"
-                  value={column}
-                  onChange={(e) => updateColumnHeader(index, e.target.value)}
-                  style={styles.columnInput}
-                />
-                <button
-                  onClick={() => removeColumn(index)}
-                  style={styles.removeButton}
-                  disabled={csvColumns.length <= 1}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-          <button onClick={addColumn} style={styles.buttonSecondary}>
-            Add Column
-          </button>
-        </div>
+             {/* CSV Configuration */}
+       <section style={styles.section}>
+         <h2 style={styles.sectionTitle}>CSV Configuration</h2>
+         <div style={styles.csvConfig}>
+           <div style={styles.columnHeaders}>
+             {csvColumns.map((column, index) => (
+               <div key={index} style={styles.columnHeader}>
+                 <input
+                   type="text"
+                   value={column}
+                   onChange={(e) => updateColumnHeader(index, e.target.value)}
+                   style={styles.columnInput}
+                 />
+                 <button
+                   onClick={() => removeColumn(index)}
+                   style={styles.removeButton}
+                   disabled={csvColumns.length <= 1}
+                 >
+                   ×
+                 </button>
+               </div>
+             ))}
+           </div>
+           <button onClick={addColumn} style={styles.buttonSecondary}>
+             Add Column
+           </button>
+           <div style={styles.csvNote}>
+             <strong>Canva Format:</strong> Use "Title", "Image", and "URL" for best compatibility with Canva's bulk create feature.
+           </div>
+         </div>
         
         {posts.length > 0 && (
           <button
@@ -501,7 +504,7 @@ DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON.`;
                              <thead>
                                   <tr>
                     <th style={styles.th}>Title</th>
-                    <th style={styles.th}>Image URL</th>
+                    <th style={styles.th}>Image</th>
                     <th style={styles.th}>Canva Status</th>
                   </tr>
                </thead>
@@ -626,9 +629,18 @@ const styles = {
     flexWrap: 'wrap',
     gap: '10px'
   },
-  csvConfig: {
-    marginBottom: '20px'
-  },
+     csvConfig: {
+     marginBottom: '20px'
+   },
+   csvNote: {
+     marginTop: '15px',
+     padding: '10px',
+     backgroundColor: '#e7f3ff',
+     border: '1px solid #b3d9ff',
+     borderRadius: '4px',
+     fontSize: '14px',
+     color: '#0056b3'
+   },
   columnHeaders: {
     display: 'flex',
     flexWrap: 'wrap',
