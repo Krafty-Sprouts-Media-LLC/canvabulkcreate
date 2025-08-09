@@ -12,7 +12,7 @@ const WordPressToCanva = () => {
   const [posts, setPosts] = useState([]);
   const [processing, setProcessing] = useState(false);
   const [csvColumns, setCsvColumns] = useState([
-    'Title', 'Optimized_Title', 'Image_URL', 'Post_URL'
+    'Title', 'Image_URL', 'Post_URL'
   ]);
   
   const [processingStatus, setProcessingStatus] = useState({
@@ -257,24 +257,14 @@ DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON.`;
     setProcessingStatus(prev => ({ ...prev, generating: true }));
     
     try {
-      // Only include posts that have been optimized
-      const optimizedPosts = posts.filter(post => post.optimizedTitle);
-      
-      if (optimizedPosts.length === 0) {
-        setErrors(['No optimized titles found. Please optimize titles first before generating CSV.']);
-        setProcessingStatus(prev => ({ ...prev, generating: false }));
-        return;
-      }
-      
-      const csvData = optimizedPosts.map(post => {
+      // Include all posts, use optimized title if available, otherwise use original title
+      const csvData = posts.map(post => {
         const row = {};
         csvColumns.forEach(column => {
           switch (column) {
             case 'Title':
-              row[column] = post.title || '';
-              break;
-            case 'Optimized_Title':
-              row[column] = post.optimizedTitle || '';
+              // Use optimized title if available, otherwise use original title
+              row[column] = post.optimizedTitle || post.title || '';
               break;
             case 'Image_URL':
               row[column] = post.imageUrl || '';
@@ -460,36 +450,34 @@ DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON.`;
           <h2 style={styles.sectionTitle}>Results ({posts.length} posts)</h2>
           <div style={styles.resultsContainer}>
             <table style={styles.table}>
-              <thead>
-                                 <tr>
-                   <th style={styles.th}>Original Title</th>
-                   <th style={styles.th}>Optimized Title</th>
-                   <th style={styles.th}>Image URL</th>
-                 </tr>
-              </thead>
-              <tbody>
-                {posts.map((post, index) => (
-                  <tr key={post.id || index} style={styles.tr}>
-                    <td style={styles.td}>{post.title}</td>
-                                         <td style={styles.td}>
+                             <thead>
+                                  <tr>
+                    <th style={styles.th}>Title</th>
+                    <th style={styles.th}>Image URL</th>
+                  </tr>
+               </thead>
+               <tbody>
+                 {posts.map((post, index) => (
+                   <tr key={post.id || index} style={styles.tr}>
+                     <td style={styles.td}>
                        {post.optimizedTitle ? (
                          <span style={styles.optimized}>{post.optimizedTitle}</span>
                        ) : (
-                         <span style={styles.pending}>Not optimized</span>
+                         <span>{post.title}</span>
                        )}
                      </td>
-                     <td style={styles.td}>
-                       {post.imageUrl ? (
-                         <a href={post.imageUrl} target="_blank" rel="noopener noreferrer" style={styles.link}>
-                           View Image
-                         </a>
-                       ) : (
-                         'No image'
-                       )}
-                     </td>
-                  </tr>
-                ))}
-              </tbody>
+                      <td style={styles.td}>
+                        {post.imageUrl ? (
+                          <a href={post.imageUrl} target="_blank" rel="noopener noreferrer" style={styles.link}>
+                            View Image
+                          </a>
+                        ) : (
+                          'No image'
+                        )}
+                      </td>
+                   </tr>
+                 ))}
+               </tbody>
             </table>
           </div>
         </section>
