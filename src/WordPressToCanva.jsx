@@ -152,10 +152,11 @@ const WordPressToCanva = () => {
   const optimizeTitles = async () => {
     setProcessingStatus(prev => ({ ...prev, optimizing: true }));
     
-    const postsWithImages = posts.filter(post => post.imageStatus === 'valid');
+    // Use all posts that have any image URL (regardless of validation status)
+    const postsWithImages = posts.filter(post => post.imageUrl);
     
     if (postsWithImages.length === 0) {
-      setErrors(['No posts with valid images to optimize. Please validate images first.']);
+      setErrors(['No posts with images to optimize. Please fetch posts with featured images first.']);
       setProcessingStatus(prev => ({ ...prev, optimizing: false }));
       return;
     }
@@ -273,7 +274,7 @@ DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON.`;
               row[column] = post.permalink || '';
               break;
             case 'Image_Status':
-              row[column] = post.imageStatus || '';
+              row[column] = post.imageUrl ? 'has_image' : 'no_image';
               break;
             default:
               row[column] = '';
@@ -386,27 +387,12 @@ DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON.`;
           </button>
           <button
             onClick={optimizeTitles}
-            disabled={posts.filter(p => p.imageStatus === 'valid').length === 0 || processingStatus.optimizing}
+            disabled={posts.filter(p => p.imageUrl).length === 0 || processingStatus.optimizing}
             style={styles.button}
           >
             {processingStatus.optimizing ? 'Optimizing...' : 'Optimize Titles'}
           </button>
-          <button
-            onClick={() => {
-              // Allow optimization even with invalid images
-              const postsWithAnyImages = posts.filter(post => post.imageStatus !== 'no_image');
-              if (postsWithAnyImages.length > 0) {
-                setPosts(prev => prev.map(post => 
-                  post.imageStatus === 'invalid' ? { ...post, imageStatus: 'valid' } : post
-                ));
-                setErrors(['Note: Proceeding with image validation bypassed. Some images may not be accessible due to CORS restrictions.']);
-              }
-            }}
-            disabled={posts.filter(p => p.imageStatus === 'invalid').length === 0 || processingStatus.optimizing}
-            style={styles.buttonSecondary}
-          >
-            Bypass Image Validation
-          </button>
+
           <button
             onClick={clearData}
             style={styles.buttonSecondary}
@@ -494,16 +480,14 @@ DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON.`;
                         <span style={styles.pending}>Not optimized</span>
                       )}
                     </td>
-                    <td style={styles.td}>
-                      <span style={{
-                        ...styles.status,
-                        ...(post.imageStatus === 'valid' ? styles.valid :
-                            post.imageStatus === 'invalid' ? styles.invalid :
-                            styles.noImage)
-                      }}>
-                        {post.imageStatus}
-                      </span>
-                    </td>
+                                         <td style={styles.td}>
+                       <span style={{
+                         ...styles.status,
+                         ...(post.imageUrl ? styles.valid : styles.noImage)
+                       }}>
+                         {post.imageUrl ? 'Has Image' : 'No Image'}
+                       </span>
+                     </td>
                     <td style={styles.td}>
                       {post.imageUrl ? (
                         <a href={post.imageUrl} target="_blank" rel="noopener noreferrer" style={styles.link}>
